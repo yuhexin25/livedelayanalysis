@@ -1,4 +1,4 @@
-export default function HubImpact({ hubs, sourceMode, onSelect }) {
+export default function HubImpact({ hubs, sourceMode, providerMode, onSelect }) {
   const ranked = [...hubs].sort((a, b) => b.hubImpactScore - a.hubImpactScore);
   const disrupted = ranked.filter(hub => hub.isDisrupted);
   const maxScore = Math.max(...ranked.map(hub => hub.hubImpactScore), 1);
@@ -20,12 +20,15 @@ export default function HubImpact({ hubs, sourceMode, onSelect }) {
         </div>
         <span className="count-badge">{disrupted.length} elevated</span>
       </div>
-      <p className="section-note">Departure delay, arrival delay, cancellation environment, route connectivity, and ground stop bonus.</p>
+      <p className="section-note">
+        {providerMode === 'flightaware' ? 'Provider-backed' : 'Estimated'} departure delay, arrival delay, and
+        cancellation environment are combined with route connectivity and FAA ground stop context.
+      </p>
       <div className="hub-summary-grid">
         <div><span>Most Critical Hub</span><strong>{mostCritical?.iata || '—'}</strong></div>
-        <div><span>Average Delay</span><strong>{averageDelay} min</strong></div>
+        <div><span>{providerMode === 'flightaware' ? 'Observed' : 'Estimated'} Avg Delay</span><strong>{averageDelay} min</strong></div>
         <div><span>Affected Airports</span><strong>{affectedAirports}</strong></div>
-        <div><span>Network Risk Index</span><strong>{networkRiskIndex}</strong></div>
+        <div><span>Derived Risk Index</span><strong>{networkRiskIndex}</strong></div>
       </div>
       <div className="impact-list">
         {ranked.slice(0, 8).map(hub => (
@@ -39,7 +42,7 @@ export default function HubImpact({ hubs, sourceMode, onSelect }) {
       </div>
       <p className="panel-footnote">
         Higher bars identify hubs where operational delay metrics intersect with larger static route connectivity.
-        FAA advisories are supplemental; the score is not an official FAA metric.
+        FAA advisories are live context when connected; the score is a derived analytical estimate, not an official FAA metric.
       </p>
     </div>
   );

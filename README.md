@@ -1,15 +1,16 @@
 # Hub Resilience Monitor
 
-Hub Resilience Monitor is a **Real-Time Airport and Flight Delay Risk Platform** for GIS and aviation analytics portfolios. It combines operational delay metrics, supplemental FAA airport advisories, static route network data, and estimated network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
+Hub Resilience Monitor is a **Live FAA Advisory + Estimated Operational Metrics Platform** for GIS and aviation analytics portfolios. It combines live FAA airport advisory/status feeds, estimated operational delay and cancellation metrics, static route network data, and derived network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
 
 **Live dashboard:** <https://yuhexin25.github.io/livedelayanalysis/>
 
 The dashboard is explicit about provenance:
 
-- **Operational delay metrics** drive severity and Hub Impact Score.
-- **FAA airport advisories** are supplemental context for ground stops, ground delay programs, and operational awareness.
+- **FAA airport advisories/status feeds** are live when the backend is connected and provide context for ground stops, ground delay programs, and operational awareness.
+- **Operational delay and cancellation metrics** drive severity and Hub Impact Score, but remain estimated model outputs unless `providerMode` is `flightaware`.
 - **Static route network data** is stored locally in `data/`.
-- **Hub Impact Score and Route Risk Score** are analytical estimates, not FAA metrics or confirmed flight-delay forecasts.
+- **Hub Impact Score and Route Risk Score** are derived analytical estimates, not FAA metrics, official airport statistics, or confirmed flight-delay forecasts.
+- **FlightAware flight-level data** is unavailable unless `FLIGHTAWARE_API_KEY` is configured and `/api/provider-test` reports `dataProvider: "flightaware"`.
 - **Fallback status data** is clearly labeled as sample data and is never presented as live.
 
 The project no longer uses FAA NOTAM-style keyword matching such as `CLSD`, `RWY CLSD`, or `AP CLSD` as the primary disruption signal.
@@ -19,13 +20,13 @@ GitHub Pages hosts only the static React frontend. It does not run the Node.js/E
 ## Features
 
 - Welcome and methodology overview
-- Live airport operational risk globe using MapLibre GL JS
+- Live FAA advisory + estimated operational metrics globe using MapLibre GL JS
 - Route Delay Risk Analyzer for origin/destination airport pairs
-- Top elevated-risk airports ranking
+- Top elevated-risk airports ranking with estimated/observed metric labels
 - Major hub vulnerability and connectivity analysis
 - Estimated Hub Impact Score with Low / Moderate / High / Critical classes
 - D3-based hub network exposure visualization
-- Airport detail panel with operational metrics and supplemental FAA advisory text
+- Airport detail panel with live FAA advisory text and estimated/observed metric provenance
 - Five-minute backend cache and sample fallback data
 
 Major hubs monitored: ATL, ORD, DFW, DEN, LAX, JFK, EWR, SFO, SEA, CLT, PHX, IAH, LAS, and MIA.
@@ -113,7 +114,7 @@ The backend tests cover FAA advisory parsing as supplemental data and operationa
 - Sample fallback operational status: `data/fallback_status.json`
 - GitHub Pages frontend fallback assets: `frontend/public/data/`
 
-FlightAware remains optional. The main user experience is the Route Delay Risk Analyzer and does not require paid flight tracking. If enabled, FlightAware integration uses:
+FlightAware remains optional. Without it, the dashboard should be read as live FAA advisory/status context plus estimated operational metrics. If enabled, FlightAware integration uses:
 
 - Airport operational metrics: `GET https://aeroapi.flightaware.com/aeroapi/airports/{ICAO}/flights`
 - Flight number lookup: `GET https://aeroapi.flightaware.com/aeroapi/flights/{ident}`
@@ -124,7 +125,7 @@ A FlightAware AeroAPI key is required. Set it on the backend as:
 FLIGHTAWARE_API_KEY=your_flightaware_aeroapi_key
 ```
 
-The backend sends this key in the `x-apikey` request header. If `FLIGHTAWARE_API_KEY` is missing, invalid, or FlightAware calls fail, the backend keeps using airport-level live/estimated operational mode and does not claim FlightAware data. It also does not infer fake flight-number routes.
+The backend sends this key in the `x-apikey` request header. If `FLIGHTAWARE_API_KEY` is missing, invalid, or FlightAware calls fail, the backend keeps using `estimated-operational-metrics` and does not claim FlightAware or flight-level live delay data. It also does not infer fake flight-number routes.
 
 Provider verification endpoints:
 
@@ -133,19 +134,19 @@ GET /api/health
 GET /api/provider-test
 ```
 
-`providerMode` and `dataProvider` are set to `flightaware` only when FlightAware AeroAPI data is actually active. Otherwise they remain `estimated-operational-metrics`.
+`providerMode` and `dataProvider` are set to `flightaware` only when FlightAware AeroAPI data is actually active. Otherwise they remain `estimated-operational-metrics`, and UI labels should read "Live FAA Advisory + Estimated Operational Metrics."
 
-FAA data describes airport operational advisories, not every individual flight. Route connections model potential downstream exposure and do not prove that a connected airport or flight is delayed.
+FAA data describes airport operational advisories/status, not every individual flight. Route connections model potential downstream exposure and do not prove that a connected airport or flight is delayed.
 
 ## Hub Impact Score
 
-The estimated score is calculated for major hubs:
+The derived score is calculated for major hubs. The delay and cancellation inputs are estimated unless `providerMode` is `flightaware`:
 
 ```text
 hub_impact_score =
   departure_delay_minutes * 0.4 +
   arrival_delay_minutes * 0.2 +
-  cancellation_rate * 200 +
+  cancellation_environment * 200 +
   connected_airports * 0.8 +
   ground_stop_bonus
 ```
@@ -158,6 +159,13 @@ Classification:
 - `75+` = Critical
 
 `connected_airports` is the hub's degree in the static route network. FAA ground stops can add a ground stop bonus, but raw FAA advisory text is not treated as a primary airport-closure signal.
+
+## Data Methodology
+
+- FAA advisory/status data = live source when `/api/health` reports `sourceMode: "live"`.
+- Operational delay and cancellation metrics = estimated model output unless `providerMode: "flightaware"`.
+- FlightAware flight-level data = unavailable unless `FLIGHTAWARE_API_KEY` is configured in Render and `/api/provider-test` reports `dataProvider: "flightaware"`.
+- Sample fallback data = used only when the configured backend request fails or the backend returns invalid dashboard JSON.
 
 ## Deployment
 
@@ -237,4 +245,4 @@ Name: VITE_API_BASE_URL
 Value: https://livedelayanalysis-backend.onrender.com
 ```
 
-The GitHub Pages workflow also sets this backend URL directly while building the frontend. When `/api/status` reports `sourceMode: "live"`, the dashboard badge displays `Live FAA Backend Connected`.
+The GitHub Pages workflow also sets this backend URL directly while building the frontend. When `/api/status` reports `sourceMode: "live"` with `providerMode: "estimated-operational-metrics"`, the dashboard badge displays `Live FAA Advisory + Estimated Operational Metrics`.

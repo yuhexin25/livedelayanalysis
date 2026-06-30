@@ -21,7 +21,7 @@ export default function TrendPanel({ airport, sourceMode }) {
           <span className="section-kicker">24-hour operational risk trend</span>
           <h2>{airport ? `${airport.iata} Estimated Risk Trend` : 'Estimated Risk Trend'}</h2>
         </div>
-        <span className="count-badge">{sourceMode === 'live' ? 'Live status input' : 'Sample input'}</span>
+        <span className="count-badge">{sourceMode === 'live' ? 'Live FAA + estimated input' : 'Sample input'}</span>
       </div>
       <svg className="trend-svg" viewBox="0 0 396 130" role="img" aria-label="Estimated trend visualization based on current operational risk severity">
         <line x1="0" y1="112" x2="396" y2="112" className="trend-axis" />

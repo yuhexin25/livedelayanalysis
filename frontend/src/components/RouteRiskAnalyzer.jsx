@@ -248,6 +248,11 @@ function AirportSummary({ label, airport }) {
 }
 
 export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
+  const isFlightAwareActive = providerMode === 'flightaware';
+  const metricSourceLabel = isFlightAwareActive
+    ? 'FlightAware-backed airport metrics active'
+    : 'Live FAA advisory + estimated operational metrics';
+
   const sortedAirports = useMemo(
     () => [...airports].sort((a, b) => a.iata.localeCompare(b.iata)),
     [airports],
@@ -279,12 +284,13 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
         <span className="section-kicker">Route-level operational exposure</span>
         <h2>Route Delay Risk Analyzer</h2>
         <p>
-          Compare airport pairs using live or estimated airport operational metrics, hub impact scores, static route
-          connectivity, and FAA ground stop or ground delay program signals.
+          Compare airport pairs using {isFlightAwareActive ? 'provider-backed' : 'estimated'} airport operational
+          metrics, derived hub impact scores, static route connectivity, and live FAA ground stop or ground delay
+          program signals when available.
         </p>
         <p className="panel-footnote">
-          This tool estimates route-level operational risk using airport status and network connectivity. It does not
-          search live tickets, seats, prices, or airline rebooking inventory.
+          This tool estimates route-level operational risk. It does not search live tickets, seats, prices, airline
+          rebooking inventory, or flight-level delays unless a live flight data provider is configured.
         </p>
       </div>
 
@@ -335,7 +341,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
             <span>Avoid disrupted hubs when possible</span>
           </label>
           <div className="risk-source-note">
-            <span>{providerMode === 'flightaware' ? 'FlightAware-backed airport metrics active' : 'Airport-level live/estimated operational mode'}</span>
+            <span>{metricSourceLabel}</span>
             <span>Airline preference is used as context only; no ticket inventory or flight schedule search is performed.</span>
           </div>
         </form>
@@ -354,7 +360,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
               <div className="risk-summary-grid">
                 <AirportSummary label="Origin" airport={assessment.origin} />
                 <AirportSummary label="Destination" airport={assessment.destination} />
-                <div><span>Route Risk Score</span><strong>{assessment.routeRiskScore} / 100</strong><small>{assessment.riskLevel}</small></div>
+                <div><span>Derived Route Risk Score</span><strong>{assessment.routeRiskScore} / 100</strong><small>{assessment.riskLevel}</small></div>
                 <div><span>Connection Model</span><strong>{connectionPreference}</strong><small>{assessment.directRoute ? 'Direct route in static network' : 'No direct route in static network'}</small></div>
               </div>
 
@@ -364,6 +370,9 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
 
               <section className="risk-driver-card">
                 <h3>Potential Delay Drivers</h3>
+                <p className="section-note compact-note">
+                  Driver values are {isFlightAwareActive ? 'provider-backed and then scored' : 'estimated model inputs and derived scores'}.
+                </p>
                 <div className="risk-driver-list">
                   {assessment.drivers.map(driver => (
                     <article className="risk-driver" key={driver.title}>
@@ -391,7 +400,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
                   </div>
                 ))}
                 <div className="contribution-row contribution-total">
-                  <span>Total Route Risk Score</span>
+                  <span>Total Derived Route Risk Score</span>
                   <strong>{assessment.routeRiskScore} / 100</strong>
                 </div>
               </section>
@@ -415,7 +424,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
               <div className="risk-summary-grid route-metrics-grid">
                 <div><span>Origin Airport Risk</span><strong>{assessment.originAirportRisk}</strong><small>{assessment.origin.iata}</small></div>
                 <div><span>Destination Airport Risk</span><strong>{assessment.destinationAirportRisk}</strong><small>{assessment.destination.iata}</small></div>
-                <div><span>Hub Exposure Score</span><strong>{assessment.hubExposureScore}</strong><small>Endpoint and candidate hub exposure</small></div>
+                <div><span>Derived Hub Exposure Score</span><strong>{assessment.hubExposureScore}</strong><small>Endpoint and candidate hub exposure</small></div>
                 <div><span>Network Propagation Potential</span><strong>{assessment.propagationPotentialScore}</strong><small>Static route exposure, not active risk by itself</small></div>
               </div>
 
@@ -423,9 +432,9 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
                 <summary>How is this risk estimated?</summary>
                 <p>
                   This score is an analytical estimate based on airport-level operational status, hub connectivity,
-                  route exposure, and FAA advisory context. Exposure and potential describe static network structure;
-                  risk describes active operational disruption under current conditions. It is not an official FAA
-                  prediction and does not use live ticket inventory or airline rebooking data.
+                  route exposure, and FAA advisory context. FAA advisory/status data is live when connected. Delay and
+                  cancellation metrics are estimated model output unless FlightAware is active. It is not an official
+                  FAA prediction and does not use ticket inventory or airline rebooking data.
                 </p>
               </details>
             </>

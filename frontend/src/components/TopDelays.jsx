@@ -1,10 +1,13 @@
-export default function TopDelays({ topDelayed, onSelect }) {
+export default function TopDelays({ topDelayed, providerMode, onSelect }) {
+  const delayLabel = providerMode === 'flightaware' ? 'Observed delay' : 'Estimated delay';
+
   return (
     <div>
       <div className="section-heading">
         <div>
           <span className="section-kicker">Operational delay risk</span>
           <h2>Top Elevated-Risk Airports</h2>
+          <p className="section-note compact-note">{delayLabel}; FAA advisories are live when the backend is connected.</p>
         </div>
       </div>
       {topDelayed.length === 0 ? (

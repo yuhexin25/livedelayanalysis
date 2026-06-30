@@ -131,11 +131,14 @@ button { font: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: 380px;
   padding: 7px 10px;
   border: 1px solid #26374a;
   border-radius: 999px;
   background: #0a121e;
   color: #b9c8d9;
+  line-height: 1.35;
+  text-align: left;
 }
 
 .source-live { color: #64e6a0; border-color: rgba(69, 212, 131, 0.32); }
@@ -247,6 +250,38 @@ button { font: inherit; }
   border-color: rgba(246, 211, 101, 0.35);
   background: rgba(246, 211, 101, 0.07);
   color: #f6d365;
+}
+
+.data-transparency-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(77, 163, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.07);
+}
+
+.data-transparency-panel p {
+  margin: 5px 0 0;
+  color: #a8bad0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.notice-pill {
+  flex: 0 0 auto;
+  max-width: 360px;
+  padding: 8px 10px;
+  border: 1px solid rgba(246, 211, 101, 0.34);
+  border-radius: 999px;
+  color: #f6d365;
+  background: rgba(246, 211, 101, 0.08);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .control-bar {
@@ -397,6 +432,7 @@ h2 { margin: 5px 0 0; font-size: 1.02rem; letter-spacing: -0.02em; }
 }
 
 .section-note { margin: -4px 0 20px; }
+.compact-note { margin: 6px 0 0; }
 .panel-footnote { margin: 18px 0 0; }
 .no-data { margin-top: 28px; }
 
@@ -1237,7 +1273,9 @@ h2 { margin: 5px 0 0; font-size: 1.02rem; letter-spacing: -0.02em; }
   .content-shell { padding: 12px; }
   .app-banner { grid-template-columns: 1fr; display: grid; }
   .source-panel { min-width: 0; text-align: left; }
-  .source-badge { justify-self: start; }
+  .source-badge { justify-self: start; max-width: 100%; }
+  .data-transparency-panel { align-items: flex-start; flex-direction: column; }
+  .notice-pill { max-width: 100%; border-radius: 10px; }
   .control-bar, .metric-strip, .secondary-grid { grid-template-columns: 1fr; }
   .map-card { height: 520px; min-height: 520px; }
   .map-overlay { align-items: flex-start; flex-direction: column; }

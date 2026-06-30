@@ -15,6 +15,7 @@ const refreshIntervalMs = 60 * 1000;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const FALLBACK_DATA_BASE_URL = `${import.meta.env.BASE_URL}data`;
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '');
+const ESTIMATED_PROVIDER = 'estimated-operational-metrics';
 
 const navigationItems = [
   { id: 'welcome', label: 'Home' },
@@ -71,17 +72,57 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function isEstimatedProvider(data) {
+  return data?.providerMode === ESTIMATED_PROVIDER || data?.dataProvider === ESTIMATED_PROVIDER;
+}
+
+function sourceLabelFor(data) {
+  if (!data) return 'Loading dashboard data';
+  if (data.sourceMode !== 'live') return 'Sample Data Mode';
+  return data.providerMode === 'flightaware'
+    ? 'Live FAA + FlightAware Operational Metrics'
+    : 'Live FAA Advisory + Estimated Operational Metrics';
+}
+
+function providerLabelFor(data) {
+  if (data?.providerMode === 'flightaware') return 'FlightAware flight-level delay metrics';
+  if (isEstimatedProvider(data)) return 'Estimated operational metrics';
+  return data?.providerMode || 'Provider unavailable';
+}
+
+function DataTransparencyNotice({ data }) {
+  if (!data || data.sourceMode !== 'live') return null;
+  const estimated = isEstimatedProvider(data);
+  return (
+    <section className="data-transparency-panel" aria-label="Data transparency">
+      <div>
+        <span className="section-kicker">Data transparency</span>
+        <p>
+          {estimated
+            ? 'This dashboard uses live FAA airport advisory/status feeds when available, combined with estimated operational metrics. It is not yet using live FlightAware flight-level delay data.'
+            : 'This dashboard uses live FAA airport advisory/status feeds and provider-backed operational metrics.'}
+        </p>
+      </div>
+      {estimated && (
+        <span className="notice-pill">
+          {data.flightAwareApiKeyConfigured
+            ? 'FlightAware API is configured, but flight-level live delay data is not active.'
+            : 'FlightAware API is not configured. Flight-level live delay data is unavailable.'}
+        </span>
+      )}
+    </section>
+  );
+}
+
 function SourcePanel({ data }) {
   return (
     <div className="source-panel">
       <span className={`source-badge ${data?.sourceMode === 'live' ? 'source-live' : 'source-fallback'}`}>
         <span className="pulse-dot" />
-        {data ? (data.sourceMode === 'live' ? 'Live FAA Backend Connected' : 'Sample Data Mode') : 'Loading dashboard data'}
+        {sourceLabelFor(data)}
       </span>
       <span>FAA advisory update: {formatTime(data?.faaUpdatedAt)}</span>
-      <span>
-        Operational mode: {data?.providerMode === 'flightaware' ? 'FlightAware airport metrics' : 'Airport-level live/estimated operational mode'}
-      </span>
+      <span>Metric provider: {providerLabelFor(data)}</span>
       <span>Dashboard fetch: {formatTime(data?.fetchedAt)}</span>
     </div>
   );
@@ -119,15 +160,15 @@ function MethodologyContent({ refreshIntervalMinutes, onOpenModal }) {
       <div className="methodology-page-grid">
         <section className="card">
           <span className="section-kicker">Primary architecture</span>
-          <h2>Operational Flight-Delay Metrics</h2>
+          <h2>Estimated Operational Metrics</h2>
           <p className="page-copy">
             The scoring layer focuses on airport network resilience, hub disruption propagation, and route-level
-            operational exposure. FlightAware can remain optional in the backend, but the main experience does not
-            depend on individual flight tracking.
+            operational exposure. When FlightAware is not configured, delay and cancellation values are model outputs,
+            not directly observed flight-level statistics.
           </p>
         </section>
         <section className="card">
-          <span className="section-kicker">Supplemental source</span>
+          <span className="section-kicker">Live source</span>
           <h2>FAA Operational Advisories</h2>
           <p className="page-copy">
             FAA NAS Status, ground stops, and ground delay programs are displayed as context. Raw FAA text is not used
@@ -138,16 +179,16 @@ function MethodologyContent({ refreshIntervalMinutes, onOpenModal }) {
           <span className="section-kicker">Estimated metric</span>
           <h2>Hub Impact Score</h2>
           <p className="formula page-formula">
-            Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Rate × 200 + Connectivity × 0.8 + Ground Stop Bonus
+            Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + Ground Stop Bonus
           </p>
-          <p className="page-copy">Scores are classified as Low, Moderate, High, or Critical and are not official FAA metrics.</p>
+          <p className="page-copy">Scores are derived analytical estimates and are not official FAA or airport metrics.</p>
         </section>
         <section className="card">
           <span className="section-kicker">Limitations</span>
-          <h2>Airport-Level Awareness</h2>
+          <h2>Flight-Level Data Availability</h2>
           <p className="page-copy">
-            The dashboard updates every {refreshIntervalMinutes} minutes and does not claim exact flight-delay
-            prediction certainty. Trend charts are estimated visualizations based on current operational severity.
+            The dashboard updates every {refreshIntervalMinutes} minutes. FlightAware flight-level data is only used
+            when its API key is configured and the provider reports active data.
           </p>
         </section>
       </div>
@@ -159,11 +200,11 @@ function AboutContent() {
   return (
     <section className="card about-page-card">
       <span className="section-kicker">About this project</span>
-      <h2>Real-Time Airport and Flight Delay Risk Platform</h2>
+      <h2>Live FAA Advisory + Estimated Operational Metrics Platform</h2>
       <p>
-        This project combines operational airport delay metrics, supplemental FAA advisories, static route network
-        data, and custom network impact scoring to explore delay propagation, hub vulnerability, and airport network
-        resilience.
+        This project combines live FAA airport advisory/status feeds, estimated operational delay and cancellation
+        metrics, static route network data, and custom network impact scoring. Flight-level live delay data is used
+        only when a provider such as FlightAware is configured.
       </p>
       <div className="tech-stack">
         <span>React</span>
@@ -309,6 +350,7 @@ function App() {
         return (
           <>
             {backendMessage && <div className="alert warning">{backendMessage}</div>}
+            <DataTransparencyNotice data={data} />
             <section className="metric-strip" aria-label="Operational overview">
               <div className="metric-card"><span>Monitored airports</span><strong>{data?.allAirports?.length ?? '—'}</strong></div>
               <div className="metric-card"><span>Major hubs</span><strong>{data?.hubs?.length ?? '—'}</strong></div>
@@ -325,15 +367,16 @@ function App() {
                   routes={data?.routes || []}
                   selectedAirport={selectedAirportView}
                   sourceMode={data?.sourceMode}
+                  providerMode={data?.providerMode}
                   onSelect={airport => selectAndNavigate(airport, 'dashboard')}
                 />
               </div>
               <div className="dashboard-side-stack">
                 <div className="card compact-card">
-                  <AirportDetail airport={selectedAirportView} sourceMode={data?.sourceMode} faaUpdatedAt={data?.faaUpdatedAt} />
+                  <AirportDetail airport={selectedAirportView} sourceMode={data?.sourceMode} providerMode={data?.providerMode} faaUpdatedAt={data?.faaUpdatedAt} />
                 </div>
                 <div className="card compact-card">
-                  <TopDelays topDelayed={topDelayed} onSelect={airport => selectAndNavigate(airport, 'dashboard')} />
+                  <TopDelays topDelayed={topDelayed} providerMode={data?.providerMode} onSelect={airport => selectAndNavigate(airport, 'dashboard')} />
                 </div>
               </div>
             </section>
@@ -363,7 +406,7 @@ function App() {
               />
             </div>
             <div className="card">
-              <HubImpact hubs={data?.hubs || []} sourceMode={data?.sourceMode} onSelect={airport => selectAndNavigate(airport, 'network')} />
+              <HubImpact hubs={data?.hubs || []} sourceMode={data?.sourceMode} providerMode={data?.providerMode} onSelect={airport => selectAndNavigate(airport, 'network')} />
             </div>
             <div className="card">
               <TrendPanel airport={activeHub || selectedAirportView} sourceMode={data?.sourceMode} />
@@ -393,6 +436,7 @@ function App() {
         return (
           <WelcomePage
             sourceMode={data?.sourceMode}
+            providerMode={data?.providerMode}
             onOpenDashboard={() => navigateToView('dashboard')}
             onViewMethodology={() => navigateToView('about')}
             onExploreNetwork={() => navigateToView('network')}
@@ -411,7 +455,7 @@ function App() {
             <h1>Hub Resilience Monitor</h1>
             <p>
               {data?.sourceMode === 'live'
-                ? 'Real-Time Airport and Flight Delay Risk Platform for hub vulnerability, delay propagation, and network resilience.'
+                ? sourceLabelFor(data)
                 : 'Sample airport and flight delay risk scenarios for hub vulnerability and network resilience.'}
             </p>
           </div>

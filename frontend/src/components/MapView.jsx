@@ -220,7 +220,7 @@ function setSourceData(map, sourceId, data) {
   if (source) source.setData(data);
 }
 
-export default function MapView({ airports, routes = [], selectedAirport, sourceMode, onSelect }) {
+export default function MapView({ airports, routes = [], selectedAirport, sourceMode, providerMode, onSelect }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const popupRef = useRef(null);
@@ -517,15 +517,22 @@ export default function MapView({ airports, routes = [], selectedAirport, source
 
   const selectedHasElevatedRisk = isElevatedRisk(selectedAirport);
   const selectedConnectivity = selectedAirport ? getConnectivity(selectedAirport, routeDegree) : 0;
+  const mapTitle = sourceMode === 'live'
+    ? providerMode === 'flightaware'
+      ? 'Live FAA + FlightAware Operational Metrics'
+      : 'Live FAA Advisory + Estimated Operational Metrics'
+    : 'Sample Airport Operational Risk';
 
   return (
     <div className="map-wrapper">
       <div className="map-overlay">
         <div>
           <span className="section-kicker">MapLibre GL · Globe</span>
-          <strong>{sourceMode === 'live' ? 'Live Airport Operational Risk' : 'Sample Airport Operational Risk'}</strong>
+          <strong>{mapTitle}</strong>
           <small>
-            {viewMode === 'status' && 'Airport Status mode shows current operational conditions.'}
+            {viewMode === 'status' && (providerMode === 'flightaware'
+              ? 'Airport Status mode shows provider-backed operational conditions.'
+              : 'Airport Status mode combines live FAA advisory context with estimated operational metrics.')}
             {viewMode === 'hub' && `${selectedAirport?.iata || 'Hub'} network mode highlights connected airports and outbound arcs.`}
             {viewMode === 'propagation' && (selectedHasElevatedRisk
               ? `${selectedAirport?.iata} propagation view shows estimated downstream exposure.`

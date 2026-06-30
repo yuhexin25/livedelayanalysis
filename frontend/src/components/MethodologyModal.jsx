@@ -7,24 +7,24 @@ export default function MethodologyModal({ refreshIntervalMinutes, onClose }) {
         <h2 id="methodology-title">How The Platform Estimates Operational Delay Risk</h2>
         <div className="methodology-grid">
           <div>
-            <h3>Data Sources</h3>
-            <p>Operational flight-delay metrics are combined with static local route network data. FAA advisories are supplemental context.</p>
+            <h3>Live FAA Source</h3>
+            <p>FAA airport advisory/status data is loaded from the backend when available and used as live operational context.</p>
           </div>
           <div>
-            <h3>Update Frequency</h3>
-            <p>The backend refreshes airport operational data every {refreshIntervalMinutes} minutes.</p>
+            <h3>Estimated Metrics</h3>
+            <p>Departure delay, arrival delay, and cancellation environment are estimated model outputs unless FlightAware is active.</p>
           </div>
           <div>
-            <h3>Hub Impact Score</h3>
+            <h3>Derived Impact Score</h3>
             <p className="formula">
-              Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Rate × 200 + Connectivity × 0.8 + Ground Stop Bonus
+              Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + Ground Stop Bonus
             </p>
           </div>
           <div>
-            <h3>Important Caveats</h3>
+            <h3>FlightAware Availability</h3>
             <p>
-              The score is an estimated analytical metric, not an official FAA metric. Raw FAA advisory text is not
-              used as the primary airport-closure signal.
+              FlightAware flight-level data is unavailable unless `FLIGHTAWARE_API_KEY` is configured. Without it,
+              scores are analytical estimates, not official FAA or airport statistics. Backend refresh: {refreshIntervalMinutes} minutes.
             </p>
           </div>
         </div>

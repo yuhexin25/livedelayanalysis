@@ -139,7 +139,7 @@ export function buildFallbackDashboardData({ airports, routes, statuses }) {
     faaUpdatedAt: null,
     fetchedAt: new Date().toISOString(),
     notice: 'Using sample fallback operational metrics — backend not connected',
-    methodology: 'Estimated Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation rate × 200 + connected airports × 0.8 + ground stop bonus.',
+    methodology: 'Sample fallback data. Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + ground stop bonus.',
     providerMode: 'sample-operational-metrics',
     hubs,
     allAirports,

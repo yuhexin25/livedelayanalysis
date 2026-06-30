@@ -273,16 +273,27 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
     };
   });
 
+  const providerMode = allAirports.some(airport => airport.provider === 'flightaware')
+    ? 'flightaware'
+    : 'estimated-operational-metrics';
+  const effectiveSourceLabel = sourceMode === 'live'
+    ? providerMode === 'flightaware'
+      ? 'Live FAA + FlightAware Operational Metrics'
+      : 'Live FAA Advisory + Estimated Operational Metrics'
+    : sourceLabel;
+
   return {
     sourceMode,
-    sourceLabel,
+    sourceLabel: effectiveSourceLabel,
     faaUpdatedAt,
     fetchedAt,
     refreshIntervalMinutes: 5,
-    notice: 'Operational delay risk is estimated from flight-delay metrics; FAA advisories are supplemental context, not NOTAM-based closure predictions.',
-    methodology: 'Estimated Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation rate × 200 + connected airports × 0.8 + ground stop bonus.',
-    providerMode: allAirports.some(airport => airport.provider === 'flightaware') ? 'flightaware' : 'estimated-operational-metrics',
-    dataProvider: allAirports.some(airport => airport.provider === 'flightaware') ? 'flightaware' : 'estimated-operational-metrics',
+    notice: 'Live FAA advisory/status data is combined with estimated operational metrics unless FlightAware is active.',
+    methodology: 'Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + ground stop bonus. Delay and cancellation values are estimated unless providerMode is flightaware.',
+    providerMode,
+    dataProvider: providerMode,
+    flightAwareApiKeyConfigured: latestProviderInfo.flightAwareApiKeyConfigured,
+    isFlightAwareActive: providerMode === 'flightaware',
     hubs,
     allAirports,
     routes,
@@ -305,7 +316,7 @@ export async function refreshLiveStatus() {
       routes,
       statuses: parsed.statuses,
       sourceMode: 'live',
-      sourceLabel: 'Live airport operational risk data',
+      sourceLabel: 'Live FAA Advisory + Estimated Operational Metrics',
       faaUpdatedAt: parsed.faaUpdatedAt,
       fetchedAt,
     });
@@ -358,7 +369,7 @@ export function getProviderDiagnostics() {
     } : null,
     message: dataProvider === 'flightaware'
       ? 'FlightAware AeroAPI is active for airport-level delay metrics.'
-      : 'Airport-level live/estimated operational mode is active; FlightAware is optional and not required for the main route analyzer.',
+      : 'Live FAA advisory/status data is active; delay and cancellation metrics are estimated because FlightAware is not configured or not active.',
   };
 }
 
