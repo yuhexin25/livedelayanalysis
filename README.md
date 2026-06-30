@@ -2,7 +2,7 @@
 
 Hub Resilience Monitor is a **Real-Time Airport and Flight Delay Risk Platform** for GIS and aviation analytics portfolios. It combines operational delay metrics, supplemental FAA airport advisories, static route network data, and estimated network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
 
-**Live dashboard:** <https://yuhexin25-oss.github.io/livedelayanalysis/>
+**Live dashboard:** <https://yuhexin25.github.io/livedelayanalysis/>
 
 The dashboard is explicit about provenance:
 
@@ -175,8 +175,11 @@ Render supplies the `PORT` environment variable automatically.
 The repository also includes `render.yaml` for a Render Blueprint named `livedelayanalysis-backend`. The backend allows browser requests from:
 
 ```text
+https://yuhexin25.github.io
 https://yuhexin25-oss.github.io
 ```
+
+Additional frontend origins can be added with the comma-separated `CORS_ALLOWED_ORIGINS` environment variable.
 
 To create the service from the Blueprint:
 
@@ -190,6 +193,7 @@ After Render deploys the service, verify that these URLs return JSON:
 ```text
 https://livedelayanalysis-backend.onrender.com/api/health
 https://livedelayanalysis-backend.onrender.com/api/status
+https://livedelayanalysis-backend.onrender.com/api/dashboard
 https://livedelayanalysis-backend.onrender.com/api/provider-test
 ```
 

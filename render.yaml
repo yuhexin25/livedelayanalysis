@@ -8,6 +8,8 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://yuhexin25.github.io,https://yuhexin25-oss.github.io
       - key: FLIGHTAWARE_API_KEY
         sync: false
     autoDeployTrigger: commit

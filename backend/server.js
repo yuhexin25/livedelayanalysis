@@ -10,10 +10,16 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ALLOWED_ORIGINS = new Set([
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://yuhexin25.github.io',
   'https://yuhexin25-oss.github.io',
   'http://localhost:5173',
-]);
+];
+const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const ALLOWED_ORIGINS = new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]);
 
 app.disable('x-powered-by');
 app.use(cors({
@@ -24,6 +30,10 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/api/status', statusRouter);
+
+app.get('/api/dashboard', (req, res) => {
+  res.json(getLatestStatus());
+});
 
 app.get('/api/flight-risk/:flightNumber', async (req, res, next) => {
   try {
