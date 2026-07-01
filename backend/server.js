@@ -54,6 +54,7 @@ app.get('/api/health', (req, res) => {
     dataProvider: status.dataProvider || status.providerMode,
     flightAwareApiKeyConfigured: status.flightAwareApiKeyConfigured,
     isFlightAwareActive: status.isFlightAwareActive,
+    openSky: status.openSky,
     faaUpdatedAt: status.faaUpdatedAt,
     fetchedAt: status.fetchedAt,
   });

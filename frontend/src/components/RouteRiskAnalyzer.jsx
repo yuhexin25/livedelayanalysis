@@ -82,6 +82,7 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
   const destinationConnectivity = destination.connectedAirports?.length || destination.hubConnectivityScore || connectedCodes(routes, destination.iata).size;
   const propagationPotentialScore = Math.min(100, Math.round((originConnectivity + destinationConnectivity) * 4));
   const hubExposureScore = Math.min(100, Math.round(Math.max(origin.hubImpactScore || 0, destination.hubImpactScore || 0, ...sharedConnections.map(airport => airport.hubImpactScore || 0))));
+  const openSkyTrafficPressure = Math.min(100, Math.round(Math.max(origin.openSkyTrafficPressureScore || 0, destination.openSkyTrafficPressureScore || 0) * 5));
   const groundProgramBonus = origin.groundStop || destination.groundStop ? 25 : origin.groundDelayProgram || destination.groundDelayProgram ? 12 : 0;
   const connectionComplexity = connectionPreference === 'Direct' ? (directRoute ? 4 : 18)
     : connectionPreference === 'One-stop' ? 12
@@ -105,6 +106,7 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
     + (destination.groundStop ? 9 : destination.groundDelayProgram ? 4 : 0),
   ), 0, 30);
   const hubConnectivityContribution = clamp(Math.round(hubExposureScore * 0.04), 0, 5);
+  const openSkyTrafficContribution = clamp(Math.round(openSkyTrafficPressure * 0.08), 0, 8);
   const networkPropagationContribution = 0;
   const currentDisruptionAmplification = currentDisruptionSignal < 15
     ? clamp(Math.round(currentDisruptionSignal * 0.08), 0, 3)
@@ -114,6 +116,7 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
     originDelayContribution
     + destinationDelayContribution
     + hubConnectivityContribution
+    + openSkyTrafficContribution
     + networkPropagationContribution
     + currentDisruptionAmplification
     + faaAdvisoryContribution,
@@ -127,6 +130,9 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
   reasons.push(`${destination.iata} currently shows ${destination.operationalStatus || 'normal commercial operational risk'}.`);
   if (originConnectivity + destinationConnectivity >= 16) {
     reasons.push('Route connects high-connectivity airports, creating propagation potential if operational disruption emerges.');
+  }
+  if ((origin.nearbyAircraftCount || 0) + (destination.nearbyAircraftCount || 0) > 0) {
+    reasons.push(`OpenSky currently shows ${origin.nearbyAircraftCount || 0} nearby aircraft at ${origin.iata} and ${destination.nearbyAircraftCount || 0} at ${destination.iata}; this is a traffic-density proxy, not official delay data.`);
   }
   if (!directRoute && connectionPreference === 'Direct') {
     reasons.push('A direct connection is not present in the static route network, so direct routing may be limited in this model.');
@@ -162,6 +168,13 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
       explanation: `${origin.iata} and ${destination.iata} are evaluated against major hub status and hub impact scores. This is static exposure, not active delay risk by itself.`,
     },
     {
+      title: 'OpenSky Traffic Pressure Proxy',
+      label: 'Traffic',
+      severity: exposureLabel(openSkyTrafficPressure),
+      contribution: openSkyTrafficContribution,
+      explanation: `OpenSky state vectors show live aircraft activity near the route endpoints. This is an observed traffic-density proxy, not official airport delay data.`,
+    },
+    {
       title: 'Network Propagation Potential',
       label: 'Potential',
       severity: exposureLabel(propagationPotentialScore),
@@ -190,6 +203,7 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
     { label: 'Origin Delay Environment', value: originDelayContribution },
     { label: 'Destination Delay Environment', value: destinationDelayContribution },
     { label: 'Hub Connectivity Exposure', value: hubConnectivityContribution },
+    { label: 'OpenSky Traffic Pressure Proxy', value: openSkyTrafficContribution },
     { label: 'Network Propagation Potential', value: networkPropagationContribution },
     { label: 'Current Disruption Amplification', value: currentDisruptionAmplification },
     { label: 'FAA Advisory Context', value: faaAdvisoryContribution },
@@ -228,6 +242,7 @@ function buildRouteAssessment({ origin, destination, routes, airports, connectio
     originAirportRisk: riskLabel(originDelayContribution * 3),
     destinationAirportRisk: riskLabel(destinationDelayContribution * 3),
     hubExposureScore,
+    openSkyTrafficPressure,
     propagationPotentialScore,
     recommendations,
     reasons,
@@ -251,7 +266,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
   const isFlightAwareActive = providerMode === 'flightaware';
   const metricSourceLabel = isFlightAwareActive
     ? 'FlightAware-backed airport metrics active'
-    : 'Live FAA advisory + estimated operational metrics';
+    : 'Live FAA advisory + OpenSky traffic signals + estimated operational metrics';
 
   const sortedAirports = useMemo(
     () => [...airports].sort((a, b) => a.iata.localeCompare(b.iata)),
@@ -285,8 +300,8 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
         <h2>Route Delay Risk Analyzer</h2>
         <p>
           Compare airport pairs using {isFlightAwareActive ? 'provider-backed' : 'estimated'} airport operational
-          metrics, derived hub impact scores, static route connectivity, and live FAA ground stop or ground delay
-          program signals when available.
+          metrics, observed OpenSky traffic-density proxies, derived hub impact scores, static route connectivity, and
+          live FAA ground stop or ground delay program signals when available.
         </p>
         <p className="panel-footnote">
           This tool estimates route-level operational risk. It does not search live tickets, seats, prices, airline
@@ -371,7 +386,8 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
               <section className="risk-driver-card">
                 <h3>Potential Delay Drivers</h3>
                 <p className="section-note compact-note">
-                  Driver values are {isFlightAwareActive ? 'provider-backed and then scored' : 'estimated model inputs and derived scores'}.
+                  Driver values combine {isFlightAwareActive ? 'provider-backed metrics' : 'estimated model inputs'},
+                  OpenSky traffic proxies, and derived scores.
                 </p>
                 <div className="risk-driver-list">
                   {assessment.drivers.map(driver => (
@@ -425,6 +441,7 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
                 <div><span>Origin Airport Risk</span><strong>{assessment.originAirportRisk}</strong><small>{assessment.origin.iata}</small></div>
                 <div><span>Destination Airport Risk</span><strong>{assessment.destinationAirportRisk}</strong><small>{assessment.destination.iata}</small></div>
                 <div><span>Derived Hub Exposure Score</span><strong>{assessment.hubExposureScore}</strong><small>Endpoint and candidate hub exposure</small></div>
+                <div><span>OpenSky Traffic Pressure Proxy</span><strong>{assessment.openSkyTrafficPressure}</strong><small>Observed aircraft positions, not delay data</small></div>
                 <div><span>Network Propagation Potential</span><strong>{assessment.propagationPotentialScore}</strong><small>Static route exposure, not active risk by itself</small></div>
               </div>
 
@@ -432,9 +449,10 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
                 <summary>How is this risk estimated?</summary>
                 <p>
                   This score is an analytical estimate based on airport-level operational status, hub connectivity,
-                  route exposure, and FAA advisory context. FAA advisory/status data is live when connected. Delay and
-                  cancellation metrics are estimated model output unless FlightAware is active. It is not an official
-                  FAA prediction and does not use ticket inventory or airline rebooking data.
+                  route exposure, OpenSky aircraft traffic proxies, and FAA advisory context. FAA advisory/status data
+                  and OpenSky aircraft positions are observed when connected. Delay and cancellation metrics are
+                  estimated model output unless FlightAware is active. It is not an official FAA prediction and does
+                  not use ticket inventory or airline rebooking data.
                 </p>
               </details>
             </>

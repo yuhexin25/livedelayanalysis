@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseStringPromise } from 'xml2js';
 import { createFlightDataProvider } from './flightDataProvider.js';
+import { getOpenSkyDiagnostics, getOpenSkyTrafficSignals, openSkyFallbackSignal } from './openSkyService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,7 @@ let latestStatus = {
   fetchedAt: null,
   refreshIntervalMinutes: 5,
   notice: 'Operational delay risk is estimated; FAA advisories are supplemental context.',
+  openSky: getOpenSkyDiagnostics(),
   hubs: [],
   allAirports: [],
   routes: [],
@@ -199,6 +201,13 @@ function inferDisruptionType(status) {
   return 'Normal';
 }
 
+function shouldFetchOpenSky(sourceMode) {
+  return sourceMode === 'live'
+    && process.env.OPENSKY_ENABLED !== 'false'
+    && process.env.NODE_ENV !== 'test'
+    && process.env.npm_lifecycle_event !== 'test';
+}
+
 export async function buildDashboardData({ airports, routes, statuses, sourceMode, sourceLabel, faaUpdatedAt, fetchedAt }) {
   const normalizedStatuses = statuses.map(item => ({
     ...normalStatus(item.airportCode),
@@ -209,6 +218,9 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
   const airportByCode = new Map(airports.map(airport => [airport.iata, airport]));
   const flightDataProvider = createFlightDataProvider({ airports, routes, faaStatuses: normalizedStatuses });
   latestProviderInfo = flightDataProvider.getProviderInfo();
+  const openSkySignals = shouldFetchOpenSky(sourceMode)
+    ? await getOpenSkyTrafficSignals(airports.filter(airport => HUB_CODES.includes(airport.iata)))
+    : new Map(airports.map(airport => [airport.iata, openSkyFallbackSignal(airport)]));
   const metricsEntries = await Promise.all(airports.map(async airport => [
     airport.iata,
     await flightDataProvider.getAirportDelayMetrics(airport.iata),
@@ -218,6 +230,7 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
   const allAirports = airports.map(airport => {
     const faaStatus = normalizedStatuses.find(status => status.airportCode === airport.iata) || normalStatus(airport.iata);
     const metrics = metricsMap.get(airport.iata);
+    const openSkySignal = openSkySignals.get(airport.iata) || openSkyFallbackSignal(airport);
     const severity = classifySeverity(metrics);
     const operationalStatus = operationalStatusFromSeverity(severity);
     const delayMinutes = Math.max(metrics.departureDelayMinutes || 0, metrics.arrivalDelayMinutes || 0);
@@ -225,6 +238,7 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
       ...airport,
       ...faaStatus,
       ...metrics,
+      ...openSkySignal,
       faaStatus: faaStatus.status,
       rawFaaAdvisory: faaStatus.status,
       operationalStatus,
@@ -248,11 +262,13 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
     const affectedAirportsCount = airport.isDisrupted ? connectedAirports.length : 0;
     const hubConnectivityScore = connectedAirports.length;
     const groundStopBonus = airport.groundStop ? 35 : 0;
+    const openSkyTrafficPressureScore = airport.openSkyTrafficPressureScore || 0;
     const hubImpactScore = Number((
       (airport.departureDelayMinutes || 0) * 0.4
       + (airport.arrivalDelayMinutes || 0) * 0.2
       + (airport.cancellationRate || 0) * 200
       + hubConnectivityScore * 0.8
+      + openSkyTrafficPressureScore * 0.4
       + groundStopBonus
     ).toFixed(1));
 
@@ -265,6 +281,7 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
       hubImpactScore,
       hubImpactClassification: classifyImpact(hubImpactScore),
       groundStopBonus,
+      openSkyTrafficPressureScore,
       affected_airports_count: affectedAirportsCount,
       disruption_type: airport.disruptionType,
       average_delay_minutes: airport.averageDelayMinutes || 0,
@@ -278,9 +295,10 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
     : 'estimated-operational-metrics';
   const effectiveSourceLabel = sourceMode === 'live'
     ? providerMode === 'flightaware'
-      ? 'Live FAA + FlightAware Operational Metrics'
-      : 'Live FAA Advisory + Estimated Operational Metrics'
+      ? 'Live FAA Advisory + OpenSky Traffic Signals + FlightAware Operational Metrics'
+      : 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics'
     : sourceLabel;
+  const openSky = getOpenSkyDiagnostics();
 
   return {
     sourceMode,
@@ -288,12 +306,13 @@ export async function buildDashboardData({ airports, routes, statuses, sourceMod
     faaUpdatedAt,
     fetchedAt,
     refreshIntervalMinutes: 5,
-    notice: 'Live FAA advisory/status data is combined with estimated operational metrics unless FlightAware is active.',
-    methodology: 'Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + ground stop bonus. Delay and cancellation values are estimated unless providerMode is flightaware.',
+    notice: 'Live FAA advisory/status data and OpenSky aircraft traffic signals are combined with estimated operational metrics unless FlightAware is active.',
+    methodology: 'Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + OpenSky traffic pressure × 0.4 + ground stop bonus. Delay and cancellation values are estimated unless providerMode is flightaware.',
     providerMode,
     dataProvider: providerMode,
     flightAwareApiKeyConfigured: latestProviderInfo.flightAwareApiKeyConfigured,
     isFlightAwareActive: providerMode === 'flightaware',
+    openSky,
     hubs,
     allAirports,
     routes,
@@ -316,7 +335,7 @@ export async function refreshLiveStatus() {
       routes,
       statuses: parsed.statuses,
       sourceMode: 'live',
-      sourceLabel: 'Live FAA Advisory + Estimated Operational Metrics',
+      sourceLabel: 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics',
       faaUpdatedAt: parsed.faaUpdatedAt,
       fetchedAt,
     });
@@ -355,6 +374,7 @@ export function getProviderDiagnostics() {
     flightAwareApiKeyConfigured: latestProviderInfo.flightAwareApiKeyConfigured,
     configuredProvider: latestProviderInfo.configuredProvider,
     isFlightAwareActive: dataProvider === 'flightaware',
+    openSky: getOpenSkyDiagnostics(),
     airportFlightsEndpoint: latestProviderInfo.airportFlightsEndpoint,
     flightStatusEndpoint: latestProviderInfo.flightStatusEndpoint,
     sampleAirport: sampleAirport ? {
@@ -365,11 +385,16 @@ export function getProviderDiagnostics() {
       arrivalDelayMinutes: sampleAirport.arrivalDelayMinutes,
       totalFlights: sampleAirport.totalFlights,
       delayedFlights: sampleAirport.delayedFlights,
+      nearbyAircraftCount: sampleAirport.nearbyAircraftCount,
+      inboundAircraftCount: sampleAirport.inboundAircraftCount,
+      outboundAircraftCount: sampleAirport.outboundAircraftCount,
+      airborneTrafficDensity: sampleAirport.airborneTrafficDensity,
+      lastOpenSkyFetchTime: sampleAirport.lastOpenSkyFetchTime,
       timestamp: sampleAirport.timestamp,
     } : null,
     message: dataProvider === 'flightaware'
-      ? 'FlightAware AeroAPI is active for airport-level delay metrics.'
-      : 'Live FAA advisory/status data is active; delay and cancellation metrics are estimated because FlightAware is not configured or not active.',
+      ? 'FlightAware AeroAPI is active for airport-level delay metrics; OpenSky remains an additional traffic proxy signal.'
+      : 'Live FAA advisory/status data and OpenSky traffic proxy signals are active when available; delay and cancellation metrics are estimated because FlightAware is not configured or not active.',
   };
 }
 

@@ -10,6 +10,12 @@ services:
     envVars:
       - key: CORS_ALLOWED_ORIGINS
         value: https://yuhexin25.github.io,https://yuhexin25-oss.github.io
+      - key: OPENSKY_CACHE_MS
+        value: 600000
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
+        sync: false
       - key: FLIGHTAWARE_API_KEY
         sync: false
     autoDeployTrigger: commit

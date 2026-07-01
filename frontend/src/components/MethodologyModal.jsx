@@ -11,13 +11,17 @@ export default function MethodologyModal({ refreshIntervalMinutes, onClose }) {
             <p>FAA airport advisory/status data is loaded from the backend when available and used as live operational context.</p>
           </div>
           <div>
+            <h3>OpenSky Traffic Signal</h3>
+            <p>OpenSky aircraft state vectors are observed position/activity data near hubs. They proxy traffic density and congestion pressure, not official delay.</p>
+          </div>
+          <div>
             <h3>Estimated Metrics</h3>
             <p>Departure delay, arrival delay, and cancellation environment are estimated model outputs unless FlightAware is active.</p>
           </div>
           <div>
             <h3>Derived Impact Score</h3>
             <p className="formula">
-              Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + Ground Stop Bonus
+              Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + OpenSky Traffic Pressure × 0.4 + Ground Stop Bonus
             </p>
           </div>
           <div>

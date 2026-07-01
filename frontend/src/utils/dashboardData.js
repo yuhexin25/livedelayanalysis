@@ -19,6 +19,14 @@ function normalStatus(code) {
     faaClosureAdvisory: false,
     closure: false,
     weatherDelay: false,
+    nearbyAircraftCount: 0,
+    inboundAircraftCount: 0,
+    outboundAircraftCount: 0,
+    airborneTrafficDensity: 0,
+    openSkyTrafficPressureScore: 0,
+    lastOpenSkyFetchTime: null,
+    openSkySignalAvailable: false,
+    openSkyMessage: 'OpenSky traffic signal unavailable in sample fallback mode',
     trend: '',
     start: '',
     end: '',
@@ -118,6 +126,7 @@ export function buildFallbackDashboardData({ airports, routes, statuses }) {
       + (airport.arrivalDelayMinutes || 0) * 0.2
       + (airport.cancellationRate || 0) * 200
       + hubConnectivityScore * 0.8
+      + (airport.openSkyTrafficPressureScore || 0) * 0.4
       + groundStopBonus
     ).toFixed(1));
 
@@ -139,7 +148,14 @@ export function buildFallbackDashboardData({ airports, routes, statuses }) {
     faaUpdatedAt: null,
     fetchedAt: new Date().toISOString(),
     notice: 'Using sample fallback operational metrics — backend not connected',
-    methodology: 'Sample fallback data. Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + ground stop bonus.',
+    methodology: 'Sample fallback data. Derived Hub Impact Score = departure delay × 0.4 + arrival delay × 0.2 + cancellation environment × 200 + connected airports × 0.8 + OpenSky traffic pressure × 0.4 + ground stop bonus.',
+    openSky: {
+      ok: false,
+      source: 'opensky',
+      lastOpenSkyFetchTime: null,
+      message: 'OpenSky traffic signal unavailable in sample fallback mode',
+      cacheMs: 600000,
+    },
     providerMode: 'sample-operational-metrics',
     hubs,
     allAirports,

@@ -80,29 +80,35 @@ function sourceLabelFor(data) {
   if (!data) return 'Loading dashboard data';
   if (data.sourceMode !== 'live') return 'Sample Data Mode';
   return data.providerMode === 'flightaware'
-    ? 'Live FAA + FlightAware Operational Metrics'
-    : 'Live FAA Advisory + Estimated Operational Metrics';
+    ? 'Live FAA Advisory + OpenSky Traffic Signals + FlightAware Operational Metrics'
+    : 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics';
 }
 
 function providerLabelFor(data) {
   if (data?.providerMode === 'flightaware') return 'FlightAware flight-level delay metrics';
-  if (isEstimatedProvider(data)) return 'Estimated operational metrics';
+  if (isEstimatedProvider(data)) return 'OpenSky traffic signals + estimated operational metrics';
   return data?.providerMode || 'Provider unavailable';
 }
 
 function DataTransparencyNotice({ data }) {
   if (!data || data.sourceMode !== 'live') return null;
   const estimated = isEstimatedProvider(data);
+  const openSkyAvailable = data.openSky?.ok;
   return (
     <section className="data-transparency-panel" aria-label="Data transparency">
       <div>
         <span className="section-kicker">Data transparency</span>
         <p>
-          {estimated
-            ? 'This dashboard uses live FAA airport advisory/status feeds when available, combined with estimated operational metrics. It is not yet using live FlightAware flight-level delay data.'
-            : 'This dashboard uses live FAA airport advisory/status feeds and provider-backed operational metrics.'}
+          {openSkyAvailable
+            ? estimated
+              ? 'This dashboard uses live FAA airport advisory/status feeds when available, observed OpenSky aircraft position signals, and estimated operational metrics. It is not yet using live FlightAware flight-level delay data.'
+              : 'This dashboard uses live FAA airport advisory/status feeds, observed OpenSky traffic signals, and provider-backed operational metrics.'
+            : 'This dashboard uses live FAA airport advisory/status feeds when available and estimated operational metrics. OpenSky traffic signals are included when the backend can fetch them.'}
         </p>
       </div>
+      {!openSkyAvailable && (
+        <span className="notice-pill">{data.openSky?.message || 'OpenSky traffic signals are currently unavailable.'}</span>
+      )}
       {estimated && (
         <span className="notice-pill">
           {data.flightAwareApiKeyConfigured
@@ -176,10 +182,18 @@ function MethodologyContent({ refreshIntervalMinutes, onOpenModal }) {
           </p>
         </section>
         <section className="card">
+          <span className="section-kicker">Observed traffic signal</span>
+          <h2>OpenSky Aircraft State Vectors</h2>
+          <p className="page-copy">
+            OpenSky contributes live aircraft position signals near hub airports: nearby aircraft, inbound/outbound
+            movement proxies, traffic density, and congestion pressure. These are not official delay statistics.
+          </p>
+        </section>
+        <section className="card">
           <span className="section-kicker">Estimated metric</span>
           <h2>Hub Impact Score</h2>
           <p className="formula page-formula">
-            Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + Ground Stop Bonus
+            Hub Impact Score = Departure Delay × 0.4 + Arrival Delay × 0.2 + Cancellation Environment × 200 + Connectivity × 0.8 + OpenSky Traffic Pressure × 0.4 + Ground Stop Bonus
           </p>
           <p className="page-copy">Scores are derived analytical estimates and are not official FAA or airport metrics.</p>
         </section>
@@ -200,11 +214,11 @@ function AboutContent() {
   return (
     <section className="card about-page-card">
       <span className="section-kicker">About this project</span>
-      <h2>Live FAA Advisory + Estimated Operational Metrics Platform</h2>
+      <h2>Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics Platform</h2>
       <p>
-        This project combines live FAA airport advisory/status feeds, estimated operational delay and cancellation
-        metrics, static route network data, and custom network impact scoring. Flight-level live delay data is used
-        only when a provider such as FlightAware is configured.
+        This project combines live FAA airport advisory/status feeds, OpenSky aircraft position signals, estimated
+        operational delay and cancellation metrics, static route network data, and custom network impact scoring.
+        Flight-level live delay data is used only when a provider such as FlightAware is configured.
       </p>
       <div className="tech-stack">
         <span>React</span>
@@ -326,7 +340,6 @@ function App() {
   }, [enrichedAirports]);
 
   const disruptedHubs = data?.hubs?.filter(hub => hub.isDisrupted) || [];
-  const affectedAirports = new Set(disruptedHubs.flatMap(hub => hub.connectedAirports.map(airport => airport.iata))).size;
   const selectedAirportView = enrichedAirports.find(airport => airport.iata === selectedAirport?.iata) || selectedAirport;
 
   function handleAirportSelect(airport) {
@@ -355,7 +368,7 @@ function App() {
               <div className="metric-card"><span>Monitored airports</span><strong>{data?.allAirports?.length ?? '—'}</strong></div>
               <div className="metric-card"><span>Major hubs</span><strong>{data?.hubs?.length ?? '—'}</strong></div>
               <div className="metric-card"><span>Elevated-risk hubs</span><strong className={disruptedHubs.length ? 'text-alert' : ''}>{disruptedHubs.length}</strong></div>
-              <div className="metric-card"><span>Network exposure</span><strong>{affectedAirports}</strong></div>
+              <div className="metric-card"><span>OpenSky aircraft near hubs</span><strong>{(data?.hubs || []).reduce((sum, hub) => sum + (hub.nearbyAircraftCount || 0), 0)}</strong></div>
             </section>
             <section className="control-bar">
               <AirportSearch airports={enrichedAirports} onSelect={airport => selectAndNavigate(airport, 'dashboard')} />

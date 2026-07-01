@@ -1,15 +1,17 @@
 # Hub Resilience Monitor
 
-Hub Resilience Monitor is a **Live FAA Advisory + Estimated Operational Metrics Platform** for GIS and aviation analytics portfolios. It combines live FAA airport advisory/status feeds, estimated operational delay and cancellation metrics, static route network data, and derived network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
+Hub Resilience Monitor is a **Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics Platform** for GIS and aviation analytics portfolios. It combines live FAA airport advisory/status feeds, observed OpenSky aircraft position signals, estimated operational delay and cancellation metrics, static route network data, and derived network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
 
 **Live dashboard:** <https://yuhexin25.github.io/livedelayanalysis/>
 
 The dashboard is explicit about provenance:
 
 - **FAA airport advisories/status feeds** are live when the backend is connected and provide context for ground stops, ground delay programs, and operational awareness.
+- **OpenSky Network aircraft state vectors** are observed aircraft position/activity signals near monitored hubs. They are used only as proxies for traffic density, inbound/outbound activity, congestion pressure, and network exposure.
 - **Operational delay and cancellation metrics** drive severity and Hub Impact Score, but remain estimated model outputs unless `providerMode` is `flightaware`.
 - **Static route network data** is stored locally in `data/`.
 - **Hub Impact Score and Route Risk Score** are derived analytical estimates, not FAA metrics, official airport statistics, or confirmed flight-delay forecasts.
+- **OpenSky and FAA data are not official delay data.** Delay and cancellation risk remains estimated/derived unless a live flight-level provider is active.
 - **FlightAware flight-level data** is unavailable unless `FLIGHTAWARE_API_KEY` is configured and `/api/provider-test` reports `dataProvider: "flightaware"`.
 - **Fallback status data** is clearly labeled as sample data and is never presented as live.
 
@@ -20,14 +22,14 @@ GitHub Pages hosts only the static React frontend. It does not run the Node.js/E
 ## Features
 
 - Welcome and methodology overview
-- Live FAA advisory + estimated operational metrics globe using MapLibre GL JS
+- Live FAA advisory + OpenSky traffic signal + estimated operational metrics globe using MapLibre GL JS
 - Route Delay Risk Analyzer for origin/destination airport pairs
 - Top elevated-risk airports ranking with estimated/observed metric labels
 - Major hub vulnerability and connectivity analysis
 - Estimated Hub Impact Score with Low / Moderate / High / Critical classes
 - D3-based hub network exposure visualization
-- Airport detail panel with live FAA advisory text and estimated/observed metric provenance
-- Five-minute backend cache and sample fallback data
+- Airport detail panel with live FAA advisory text, OpenSky aircraft counts, and estimated/observed metric provenance
+- Five-minute FAA refresh, 10-minute OpenSky traffic cache, and sample fallback data
 
 Major hubs monitored: ATL, ORD, DFW, DEN, LAX, JFK, EWR, SFO, SEA, CLT, PHX, IAH, LAS, and MIA.
 
@@ -109,12 +111,30 @@ The backend tests cover FAA advisory parsing as supplemental data and operationa
 
 - FlightAware AeroAPI-ready provider abstraction: `backend/services/flightDataProvider.js`
 - FAA live airport status API, used as supplemental advisory context: <https://nasstatus.faa.gov/api/airport-status-information>
+- OpenSky Network state vectors, used as observed traffic proxy signals: <https://opensky-network.org/api/states/all>
 - Local airport metadata: `data/airports.json`
 - Local static route network: `data/routes.json`
 - Sample fallback operational status: `data/fallback_status.json`
 - GitHub Pages frontend fallback assets: `frontend/public/data/`
 
-FlightAware remains optional. Without it, the dashboard should be read as live FAA advisory/status context plus estimated operational metrics. If enabled, FlightAware integration uses:
+OpenSky Network is used as an additional live operational signal, not as a replacement for FlightAware and not as official delay data. The backend queries OpenSky state vectors for the monitored hub region and derives:
+
+- `nearbyAircraftCount`
+- `inboundAircraftCount`
+- `outboundAircraftCount`
+- `airborneTrafficDensity`
+- `lastOpenSkyFetchTime`
+
+OpenSky is cached on the backend. The default `OPENSKY_CACHE_MS` is `600000` (10 minutes), with a minimum of 5 minutes to avoid high-frequency polling and rate-limit pressure. Optional OpenSky OAuth credentials can be set as:
+
+```text
+OPENSKY_CLIENT_ID=your_opensky_client_id
+OPENSKY_CLIENT_SECRET=your_opensky_client_secret
+```
+
+Set `OPENSKY_ENABLED=false` only if you need to temporarily disable OpenSky fetching while keeping the FAA + estimated metrics backend live.
+
+FlightAware remains optional. Without it, the dashboard should be read as live FAA advisory/status context plus OpenSky traffic signals plus estimated operational metrics. If enabled, FlightAware integration uses:
 
 - Airport operational metrics: `GET https://aeroapi.flightaware.com/aeroapi/airports/{ICAO}/flights`
 - Flight number lookup: `GET https://aeroapi.flightaware.com/aeroapi/flights/{ident}`
@@ -134,9 +154,9 @@ GET /api/health
 GET /api/provider-test
 ```
 
-`providerMode` and `dataProvider` are set to `flightaware` only when FlightAware AeroAPI data is actually active. Otherwise they remain `estimated-operational-metrics`, and UI labels should read "Live FAA Advisory + Estimated Operational Metrics."
+`providerMode` and `dataProvider` are set to `flightaware` only when FlightAware AeroAPI data is actually active. Otherwise they remain `estimated-operational-metrics`, and UI labels should read "Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics."
 
-FAA data describes airport operational advisories/status, not every individual flight. Route connections model potential downstream exposure and do not prove that a connected airport or flight is delayed.
+FAA data describes airport operational advisories/status, not every individual flight. OpenSky describes aircraft positions/state vectors, not airport delays. Route connections model potential downstream exposure and do not prove that a connected airport or flight is delayed.
 
 ## Hub Impact Score
 
@@ -148,6 +168,7 @@ hub_impact_score =
   arrival_delay_minutes * 0.2 +
   cancellation_environment * 200 +
   connected_airports * 0.8 +
+  OpenSky_traffic_pressure * 0.4 +
   ground_stop_bonus
 ```
 
@@ -158,11 +179,12 @@ Classification:
 - `50-75` = High
 - `75+` = Critical
 
-`connected_airports` is the hub's degree in the static route network. FAA ground stops can add a ground stop bonus, but raw FAA advisory text is not treated as a primary airport-closure signal.
+`connected_airports` is the hub's degree in the static route network. `OpenSky_traffic_pressure` is a derived proxy based on nearby, inbound, and outbound aircraft state vectors. FAA ground stops can add a ground stop bonus, but raw FAA advisory text is not treated as a primary airport-closure signal.
 
 ## Data Methodology
 
 - FAA advisory/status data = live source when `/api/health` reports `sourceMode: "live"`.
+- OpenSky aircraft state vectors = observed aircraft position/activity data used as traffic-density and congestion-pressure proxy signals.
 - Operational delay and cancellation metrics = estimated model output unless `providerMode: "flightaware"`.
 - FlightAware flight-level data = unavailable unless `FLIGHTAWARE_API_KEY` is configured in Render and `/api/provider-test` reports `dataProvider: "flightaware"`.
 - Sample fallback data = used only when the configured backend request fails or the backend returns invalid dashboard JSON.
@@ -217,6 +239,15 @@ To add the FlightAware AeroAPI key in Render:
 8. Trigger a manual deploy or wait for Render to redeploy.
 9. Open `/api/provider-test` and confirm `dataProvider` is `flightaware`.
 
+To add OpenSky OAuth credentials in Render:
+
+1. Open the Render Dashboard.
+2. Select the `livedelayanalysis-backend` Web Service.
+3. Open `Environment`.
+4. Add `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`.
+5. Keep `OPENSKY_CACHE_MS` at `600000` or higher unless you have a reason to change it.
+6. Redeploy, then open `/api/provider-test` and confirm the `openSky` diagnostics show recent traffic signal fetch metadata.
+
 ### GitHub Pages Frontend
 
 The repository includes `.github/workflows/deploy.yml`, which builds the app inside `frontend/` and deploys only `frontend/dist/` to GitHub Pages. The Vite base path is fixed to `/livedelayanalysis/` so JavaScript, CSS, and other generated asset URLs work at the project Pages URL.
@@ -245,4 +276,4 @@ Name: VITE_API_BASE_URL
 Value: https://livedelayanalysis-backend.onrender.com
 ```
 
-The GitHub Pages workflow also sets this backend URL directly while building the frontend. When `/api/status` reports `sourceMode: "live"` with `providerMode: "estimated-operational-metrics"`, the dashboard badge displays `Live FAA Advisory + Estimated Operational Metrics`.
+The GitHub Pages workflow also sets this backend URL directly while building the frontend. When `/api/status` reports `sourceMode: "live"` with `providerMode: "estimated-operational-metrics"`, the dashboard badge displays `Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics`.

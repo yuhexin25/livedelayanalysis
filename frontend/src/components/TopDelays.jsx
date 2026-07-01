@@ -7,7 +7,9 @@ export default function TopDelays({ topDelayed, providerMode, onSelect }) {
         <div>
           <span className="section-kicker">Operational delay risk</span>
           <h2>Top Elevated-Risk Airports</h2>
-          <p className="section-note compact-note">{delayLabel}; FAA advisories are live when the backend is connected.</p>
+          <p className="section-note compact-note">
+            {delayLabel}; FAA advisories and OpenSky traffic signals are live when available.
+          </p>
         </div>
       </div>
       {topDelayed.length === 0 ? (

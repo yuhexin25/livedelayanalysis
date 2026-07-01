@@ -519,8 +519,8 @@ export default function MapView({ airports, routes = [], selectedAirport, source
   const selectedConnectivity = selectedAirport ? getConnectivity(selectedAirport, routeDegree) : 0;
   const mapTitle = sourceMode === 'live'
     ? providerMode === 'flightaware'
-      ? 'Live FAA + FlightAware Operational Metrics'
-      : 'Live FAA Advisory + Estimated Operational Metrics'
+      ? 'Live FAA + OpenSky + FlightAware Operational Metrics'
+      : 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics'
     : 'Sample Airport Operational Risk';
 
   return (
@@ -531,8 +531,8 @@ export default function MapView({ airports, routes = [], selectedAirport, source
           <strong>{mapTitle}</strong>
           <small>
             {viewMode === 'status' && (providerMode === 'flightaware'
-              ? 'Airport Status mode shows provider-backed operational conditions.'
-              : 'Airport Status mode combines live FAA advisory context with estimated operational metrics.')}
+              ? 'Airport Status mode shows FAA advisories, OpenSky traffic signals, and provider-backed operational conditions.'
+              : 'Airport Status mode combines live FAA advisory context, OpenSky traffic proxies, and estimated operational metrics.')}
             {viewMode === 'hub' && `${selectedAirport?.iata || 'Hub'} network mode highlights connected airports and outbound arcs.`}
             {viewMode === 'propagation' && (selectedHasElevatedRisk
               ? `${selectedAirport?.iata} propagation view shows estimated downstream exposure.`

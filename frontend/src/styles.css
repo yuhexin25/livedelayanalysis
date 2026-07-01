@@ -235,6 +235,7 @@ button { font: inherit; }
 .live-dot { background: #45d483; }
 .static-dot { background: #4da3ff; }
 .estimate-dot { background: #a78bfa; }
+.traffic-dot { background: #22d3ee; }
 
 .alert {
   margin: 0 0 16px;
@@ -728,6 +729,7 @@ h2 { margin: 5px 0 0; font-size: 1.02rem; letter-spacing: -0.02em; }
 .detail-grid strong { color: #d9e5f2; font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; font-weight: 500; }
 
 .advisory-box { margin-top: 14px; padding: 12px; border-left: 2px solid #3489db; background: rgba(52, 137, 219, 0.06); }
+.traffic-box { border-left-color: #22d3ee; background: rgba(34, 211, 238, 0.055); }
 .advisory-box p { margin: 7px 0; color: #a8b8ca; font-size: 0.74rem; line-height: 1.5; overflow-wrap: anywhere; }
 .advisory-box small { color: #6f839a; font-size: 0.66rem; }
 
