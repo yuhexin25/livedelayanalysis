@@ -133,7 +133,9 @@ function makeAirportFeatureCollection({ airports, selectedAirport, connectedCode
             severity: getSeverity(airport),
             color: severityColors[getSeverity(airport)] || severityColors.green,
             status: airport.operationalStatus || airport.disruptionType || 'Normal operations',
+            faaStatus: airport.rawFaaAdvisory || airport.faaStatus || airport.status || 'No active FAA advisory',
             delay: airportDelay(airport),
+            trafficDensity: airport.airborneTrafficDensity ?? null,
             connectivity,
             impactScore: airport.hubImpactScore || 0,
             isHub: Boolean(airport.isHub),
@@ -149,7 +151,37 @@ function makeAirportFeatureCollection({ airports, selectedAirport, connectedCode
 }
 
 function makeRouteFeatureCollection({ airportsByCode, routes, selectedAirport, connectedCodes, mode }) {
-  if (mode === 'status' || !selectedAirport?.iata) {
+  if (mode === 'status') {
+    return {
+      type: 'FeatureCollection',
+      features: (routes || [])
+        .map(route => {
+          const origin = airportsByCode.get(route.origin);
+          const destination = airportsByCode.get(route.destination);
+          const originCoordinates = normalizeLngLat(origin);
+          const destinationCoordinates = normalizeLngLat(destination);
+          if (!originCoordinates || !destinationCoordinates) return null;
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: interpolateGreatCircle(originCoordinates, destinationCoordinates, 32),
+            },
+            properties: {
+              origin: route.origin,
+              destination: route.destination,
+              importance: 1,
+              elevated: false,
+              exposure: 0,
+              defaultRoute: true,
+            },
+          };
+        })
+        .filter(Boolean),
+    };
+  }
+
+  if (!selectedAirport?.iata) {
     return { type: 'FeatureCollection', features: [] };
   }
 
@@ -186,6 +218,7 @@ function makeRouteFeatureCollection({ airportsByCode, routes, selectedAirport, c
             importance: Math.max(1, Math.min(8, Math.round(((selected?.hubConnectivityScore || connectedSet.size || 1) + (downstream?.hubConnectivityScore || 1)) / 4))),
             elevated,
             exposure: Math.max(airportDelay(selected), downstreamImpact),
+            defaultRoute: false,
           },
         };
       })
@@ -220,7 +253,7 @@ function setSourceData(map, sourceId, data) {
   if (source) source.setData(data);
 }
 
-export default function MapView({ airports, routes = [], selectedAirport, sourceMode, providerMode, onSelect }) {
+export default function MapView({ airports, routes = [], selectedAirport, sourceMode, onSelect }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const popupRef = useRef(null);
@@ -316,7 +349,7 @@ export default function MapView({ airports, routes = [], selectedAirport, source
         paint: {
           'line-gradient': routeLineGradientExpression(viewMode),
           'line-width': ['interpolate', ['linear'], ['get', 'importance'], 1, 1.2, 8, 4.2],
-          'line-opacity': 0.42,
+          'line-opacity': ['case', ['get', 'defaultRoute'], 0.16, 0.42],
         },
       });
 
@@ -331,7 +364,7 @@ export default function MapView({ airports, routes = [], selectedAirport, source
         paint: {
           'line-color': '#d7ebff',
           'line-width': ['interpolate', ['linear'], ['get', 'importance'], 1, 1, 8, 3.2],
-          'line-opacity': 0.52,
+          'line-opacity': ['case', ['get', 'defaultRoute'], 0, 0.52],
           'line-dasharray': [0, 3, 1.4],
         },
       });
@@ -439,8 +472,9 @@ export default function MapView({ airports, routes = [], selectedAirport, source
           .setLngLat(coordinates)
           .setHTML(`
             <strong>${props.code} · ${props.name}</strong>
-            <span>${props.status}</span>
-            <small>Delay: ${props.delay || 0} min · Connectivity: ${props.connectivity || 0}</small>
+            <span>FAA: ${props.faaStatus || 'No active advisory'}</span>
+            <span>Estimated risk: ${props.status} (${Number(props.impactScore || 0).toFixed(1)})</span>
+            <small>OpenSky traffic density: ${props.trafficDensity ?? 'Unavailable'} · Connectivity: ${props.connectivity || 0}</small>
           `)
           .addTo(map);
       });
@@ -517,11 +551,10 @@ export default function MapView({ airports, routes = [], selectedAirport, source
 
   const selectedHasElevatedRisk = isElevatedRisk(selectedAirport);
   const selectedConnectivity = selectedAirport ? getConnectivity(selectedAirport, routeDegree) : 0;
-  const mapTitle = sourceMode === 'live'
-    ? providerMode === 'flightaware'
-      ? 'Live FAA + OpenSky + FlightAware Operational Metrics'
-      : 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics'
-    : 'Sample Airport Operational Risk';
+  const mapTitle = 'US Airport Operations Map';
+  const mapSubtitle = sourceMode === 'live'
+    ? 'FAA advisories + OpenSky observed traffic + derived operational metrics.'
+    : 'Sample airport operations scenario using fallback data.';
 
   return (
     <div className="map-wrapper">
@@ -530,9 +563,7 @@ export default function MapView({ airports, routes = [], selectedAirport, source
           <span className="section-kicker">MapLibre GL · Globe</span>
           <strong>{mapTitle}</strong>
           <small>
-            {viewMode === 'status' && (providerMode === 'flightaware'
-              ? 'Airport Status mode shows FAA advisories, OpenSky traffic signals, and provider-backed operational conditions.'
-              : 'Airport Status mode combines live FAA advisory context, OpenSky traffic proxies, and estimated operational metrics.')}
+            {viewMode === 'status' && mapSubtitle}
             {viewMode === 'hub' && `${selectedAirport?.iata || 'Hub'} network mode highlights connected airports and outbound arcs.`}
             {viewMode === 'propagation' && (selectedHasElevatedRisk
               ? `${selectedAirport?.iata} propagation view shows estimated downstream exposure.`

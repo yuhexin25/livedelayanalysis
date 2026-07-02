@@ -384,10 +384,10 @@ export default function RouteRiskAnalyzer({ airports, routes, providerMode }) {
               </div>
 
               <section className="risk-driver-card">
-                <h3>Potential Delay Drivers</h3>
+                <h3>Why this risk?</h3>
                 <p className="section-note compact-note">
                   Driver values combine {isFlightAwareActive ? 'provider-backed metrics' : 'estimated model inputs'},
-                  OpenSky traffic proxies, and derived scores.
+                  OpenSky traffic proxies, and derived scores. This is a derived estimate, not an official delay prediction.
                 </p>
                 <div className="risk-driver-list">
                   {assessment.drivers.map(driver => (

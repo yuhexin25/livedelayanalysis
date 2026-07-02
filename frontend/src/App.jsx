@@ -76,47 +76,143 @@ function isEstimatedProvider(data) {
   return data?.providerMode === ESTIMATED_PROVIDER || data?.dataProvider === ESTIMATED_PROVIDER;
 }
 
-function sourceLabelFor(data) {
-  if (!data) return 'Loading dashboard data';
-  if (data.sourceMode !== 'live') return 'Sample Data Mode';
-  return data.providerMode === 'flightaware'
-    ? 'Live FAA Advisory + OpenSky Traffic Signals + FlightAware Operational Metrics'
-    : 'Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics';
-}
-
 function providerLabelFor(data) {
   if (data?.providerMode === 'flightaware') return 'FlightAware flight-level delay metrics';
   if (isEstimatedProvider(data)) return 'OpenSky traffic signals + estimated operational metrics';
   return data?.providerMode || 'Provider unavailable';
 }
 
-function DataTransparencyNotice({ data }) {
+function sourceBadgeLabel(data) {
+  if (!data) return 'Loading dashboard data';
+  if (data.sourceMode !== 'live') return 'Sample Data Mode';
+  return 'Live operations signals connected';
+}
+
+function hasActiveFaaAdvisory(airport) {
+  const advisory = airport?.rawFaaAdvisory || airport?.faaStatus || airport?.status || '';
+  return Boolean(
+    airport?.groundStop
+    || airport?.groundDelayProgram
+    || airport?.weatherDelay
+    || airport?.faaClosureAdvisory
+    || (advisory && !/no active/i.test(advisory)),
+  );
+}
+
+function kpiValue(value, available = true) {
+  if (!available) return 'Unavailable';
+  return value;
+}
+
+function buildDashboardMetrics(data) {
+  const airports = data?.allAirports || [];
+  const hubs = data?.hubs || [];
+  const live = data?.sourceMode === 'live';
+  const openSkyAvailable = Boolean(data?.openSky?.ok);
+  return {
+    faaAdvisories: kpiValue(airports.filter(hasActiveFaaAdvisory).length, live && airports.length > 0),
+    observedAircraftNearby: kpiValue(
+      airports.reduce((sum, airport) => sum + (airport.nearbyAircraftCount || 0), 0),
+      live && openSkyAvailable,
+    ),
+    highRiskAirports: kpiValue(
+      airports.filter(airport => ['orange', 'red'].includes(airport.severity)).length,
+      live && airports.length > 0,
+    ),
+    majorHubs: kpiValue(hubs.length, hubs.length > 0),
+  };
+}
+
+function findBusiestOpenSkyHub(hubs) {
+  return [...(hubs || [])].sort((a, b) => (b.nearbyAircraftCount || 0) - (a.nearbyAircraftCount || 0))[0] || null;
+}
+
+function findHighestRiskHub(hubs) {
+  return [...(hubs || [])].sort((a, b) => (b.hubImpactScore || 0) - (a.hubImpactScore || 0))[0] || null;
+}
+
+function networkConditionLabel({ advisoryCount, highRiskCount, openSkyAvailable, busiestHub }) {
+  if (advisoryCount >= 4 || highRiskCount >= 4) return 'Elevated';
+  if (advisoryCount > 0 || highRiskCount > 0 || (openSkyAvailable && (busiestHub?.airborneTrafficDensity || 0) >= 0.5)) return 'Moderate';
+  return 'Stable';
+}
+
+function AviationSnapshot({ data }) {
+  if (!data?.allAirports?.length) return null;
+  const hubs = data.hubs || [];
+  const advisoryCount = data.sourceMode === 'live' ? data.allAirports.filter(hasActiveFaaAdvisory).length : null;
+  const highRiskAirports = data.allAirports.filter(airport => ['orange', 'red'].includes(airport.severity));
+  const busiestHub = data.openSky?.ok ? findBusiestOpenSkyHub(hubs) : null;
+  const highestRiskHub = findHighestRiskHub(hubs);
+  const condition = networkConditionLabel({
+    advisoryCount: advisoryCount || 0,
+    highRiskCount: highRiskAirports.length,
+    openSkyAvailable: Boolean(data.openSky?.ok),
+    busiestHub,
+  });
+  const advisoryText = advisoryCount == null
+    ? 'FAA advisory status is unavailable because the dashboard is in sample fallback mode.'
+    : advisoryCount === 0
+      ? 'No major monitored FAA advisory signal is currently detected.'
+      : `${advisoryCount} monitored airport${advisoryCount === 1 ? '' : 's'} show FAA advisory context.`;
+  const trafficText = data.openSky?.ok && busiestHub
+    ? `${busiestHub.iata} has the busiest observed OpenSky traffic proxy with ${busiestHub.nearbyAircraftCount || 0} nearby aircraft.`
+    : 'OpenSky traffic proxy data is currently unavailable.';
+  const riskText = highestRiskHub
+    ? `${highestRiskHub.iata} has the highest derived hub risk score (${(highestRiskHub.hubImpactScore || 0).toFixed(1)}).`
+    : 'Derived hub risk is unavailable.';
+
+  return (
+    <section className="snapshot-panel">
+      <div>
+        <span className="section-kicker">Executive summary</span>
+        <h2>Today's Aviation Snapshot</h2>
+        <p>
+          {condition === 'Stable'
+            ? 'No major nationwide FAA disruption is currently detected. Estimated operational risk remains broadly stable across monitored hubs.'
+            : `Overall network condition is ${condition.toLowerCase()}, with attention driven by advisory, traffic-density, or derived risk signals.`}
+        </p>
+      </div>
+      <div className="snapshot-grid">
+        <div><span>FAA advisory status</span><strong>{advisoryText}</strong></div>
+        <div><span>Busiest observed hub</span><strong>{trafficText}</strong></div>
+        <div><span>Highest estimated-risk hub</span><strong>{riskText}</strong></div>
+        <div><span>Overall network condition</span><strong>{condition}</strong></div>
+      </div>
+    </section>
+  );
+}
+
+function DataMethodologyPanel({ data }) {
   if (!data || data.sourceMode !== 'live') return null;
   const estimated = isEstimatedProvider(data);
   const openSkyAvailable = data.openSky?.ok;
   return (
-    <section className="data-transparency-panel" aria-label="Data transparency">
-      <div>
-        <span className="section-kicker">Data transparency</span>
-        <p>
-          {openSkyAvailable
-            ? estimated
-              ? 'This dashboard uses live FAA airport advisory/status feeds when available, observed OpenSky aircraft position signals, and estimated operational metrics. It is not yet using live FlightAware flight-level delay data.'
-              : 'This dashboard uses live FAA airport advisory/status feeds, observed OpenSky traffic signals, and provider-backed operational metrics.'
-            : 'This dashboard uses live FAA airport advisory/status feeds when available and estimated operational metrics. OpenSky traffic signals are included when the backend can fetch them.'}
-        </p>
-      </div>
-      {!openSkyAvailable && (
-        <span className="notice-pill">{data.openSky?.message || 'OpenSky traffic signals are currently unavailable.'}</span>
-      )}
-      {estimated && (
-        <span className="notice-pill">
-          {data.flightAwareApiKeyConfigured
-            ? 'FlightAware API is configured, but flight-level live delay data is not active.'
-            : 'FlightAware API is not configured. Flight-level live delay data is unavailable.'}
+    <details className="methodology-compact">
+      <summary>
+        <span>
+          <span className="section-kicker">Data Sources & Methodology</span>
+          <strong>FAA advisory feed, OpenSky traffic proxy, and derived risk modeling</strong>
         </span>
-      )}
-    </section>
+        <span className="methodology-status-row">
+          <i className="source-chip live">FAA live</i>
+          <i className={`source-chip ${openSkyAvailable ? 'live' : 'muted'}`}>OpenSky {openSkyAvailable ? 'observed' : 'unavailable'}</i>
+          <i className="source-chip estimate">Estimated risk</i>
+          {estimated && (
+            <i className="source-chip warning">
+              {data.flightAwareApiKeyConfigured ? 'FlightAware inactive' : 'FlightAware not configured'}
+            </i>
+          )}
+        </span>
+      </summary>
+      <div className="methodology-detail-grid">
+        <div><strong>FAA Advisory</strong><span>Official airport/airspace advisory feed for ground stops, delay programs, closure advisories, and operational context.</span></div>
+        <div><strong>OpenSky Traffic Signals</strong><span>Observed aircraft position data used only as a nearby airborne traffic and density proxy, not official delay data.</span></div>
+        <div><strong>Estimated Operational Metrics</strong><span>Model-derived delay, cancellation environment, hub impact, and route risk estimates.</span></div>
+        <div><strong>FlightAware</strong><span>{estimated ? 'Inactive unless explicitly configured and verified.' : 'Active provider-backed operational metrics.'}</span></div>
+        {!openSkyAvailable && <div><strong>OpenSky status</strong><span>{data.openSky?.message || 'OpenSky traffic signals are currently unavailable.'}</span></div>}
+      </div>
+    </details>
   );
 }
 
@@ -125,7 +221,7 @@ function SourcePanel({ data }) {
     <div className="source-panel">
       <span className={`source-badge ${data?.sourceMode === 'live' ? 'source-live' : 'source-fallback'}`}>
         <span className="pulse-dot" />
-        {sourceLabelFor(data)}
+        {sourceBadgeLabel(data)}
       </span>
       <span>FAA advisory update: {formatTime(data?.faaUpdatedAt)}</span>
       <span>Metric provider: {providerLabelFor(data)}</span>
@@ -363,12 +459,20 @@ function App() {
         return (
           <>
             {backendMessage && <div className="alert warning">{backendMessage}</div>}
-            <DataTransparencyNotice data={data} />
+            <DataMethodologyPanel data={data} />
+            <AviationSnapshot data={data} />
             <section className="metric-strip" aria-label="Operational overview">
-              <div className="metric-card"><span>Monitored airports</span><strong>{data?.allAirports?.length ?? '—'}</strong></div>
-              <div className="metric-card"><span>Major hubs</span><strong>{data?.hubs?.length ?? '—'}</strong></div>
-              <div className="metric-card"><span>Elevated-risk hubs</span><strong className={disruptedHubs.length ? 'text-alert' : ''}>{disruptedHubs.length}</strong></div>
-              <div className="metric-card"><span>OpenSky aircraft near hubs</span><strong>{(data?.hubs || []).reduce((sum, hub) => sum + (hub.nearbyAircraftCount || 0), 0)}</strong></div>
+              {(() => {
+                const metrics = buildDashboardMetrics(data);
+                return (
+                  <>
+                    <div className="metric-card"><span>Current FAA Advisories</span><strong>{metrics.faaAdvisories}</strong></div>
+                    <div className="metric-card"><span>Observed Aircraft Nearby / Across Monitored Airports</span><strong>{metrics.observedAircraftNearby}</strong></div>
+                    <div className="metric-card"><span>Estimated High-risk Airports</span><strong className={Number(metrics.highRiskAirports) > 0 ? 'text-alert' : ''}>{metrics.highRiskAirports}</strong></div>
+                    <div className="metric-card"><span>Major Hub Airports</span><strong>{metrics.majorHubs}</strong></div>
+                  </>
+                );
+              })()}
             </section>
             <section className="control-bar">
               <AirportSearch airports={enrichedAirports} onSelect={airport => selectAndNavigate(airport, 'dashboard')} />
@@ -380,7 +484,6 @@ function App() {
                   routes={data?.routes || []}
                   selectedAirport={selectedAirportView}
                   sourceMode={data?.sourceMode}
-                  providerMode={data?.providerMode}
                   onSelect={airport => selectAndNavigate(airport, 'dashboard')}
                 />
               </div>
@@ -468,8 +571,8 @@ function App() {
             <h1>Hub Resilience Monitor</h1>
             <p>
               {data?.sourceMode === 'live'
-                ? sourceLabelFor(data)
-                : 'Sample airport and flight delay risk scenarios for hub vulnerability and network resilience.'}
+                ? 'A real-time aviation operations and hub resilience dashboard using FAA advisories, OpenSky observed traffic signals, and transparent estimated risk modeling.'
+                : 'Sample aviation operations scenarios for hub vulnerability and network resilience.'}
             </p>
           </div>
           <SourcePanel data={data} />

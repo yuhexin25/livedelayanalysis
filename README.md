@@ -2,6 +2,8 @@
 
 Hub Resilience Monitor is a **Live FAA Advisory + OpenSky Traffic Signals + Estimated Operational Metrics Platform** for GIS and aviation analytics portfolios. It combines live FAA airport advisory/status feeds, observed OpenSky aircraft position signals, estimated operational delay and cancellation metrics, static route network data, and derived network impact scoring to explore delay propagation, hub vulnerability, and airport network resilience.
 
+The project is best understood as **a real-time aviation operations and hub resilience dashboard using FAA advisories, OpenSky observed traffic signals, and transparent estimated risk modeling**.
+
 **Live dashboard:** <https://yuhexin25.github.io/livedelayanalysis/>
 
 The dashboard is explicit about provenance:
@@ -22,6 +24,7 @@ GitHub Pages hosts only the static React frontend. It does not run the Node.js/E
 ## Features
 
 - Welcome and methodology overview
+- Today's Aviation Snapshot with FAA advisory status, OpenSky traffic proxy, highest estimated-risk hub, and network condition
 - Live FAA advisory + OpenSky traffic signal + estimated operational metrics globe using MapLibre GL JS
 - Route Delay Risk Analyzer for origin/destination airport pairs
 - Top elevated-risk airports ranking with estimated/observed metric labels
